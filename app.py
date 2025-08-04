@@ -1,24 +1,19 @@
-import streamlit as st
 from paddleocr import PaddleOCR
 import numpy as np
 from PIL import Image
+import cv2
 
-ocr = PaddleOCR(use_angle_cls=True, lang='en')
+# Load
+ocr = PaddleOCR(use_angle_cls=True, lang='en',
+                det_db_thresh=0.1, det_db_box_thresh=0.1)
 
-def preprocess_image(pil_img):
-    return np.array(pil_img.convert("RGB"))
-
-def extract_text(image):
-    result = ocr.ocr(image)
-    return "\n".join([line[1][0] for line in result[0]]) if result and len(result[0]) > 0 else "[NO TEXT DETECTED]"
-
-st.title("🔍 PaddleOCR Test")
-
-uploaded_file = st.file_uploader("Upload certificate", type=["jpg", "jpeg", "png"])
-
-
-
-    text = extract_text(preprocessed)
-
-    st.subheader("📄 OCR Text")
-    st.text(text)
+img = np.array(Image.open("c2.jpeg").convert("RGB"))
+# Try inverted version if necessary
+gray = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+_, inv = cv2.threshold(gray, 150, 255, cv2.THRESH_BINARY_INV)
+inv = cv2.cvtColor(inv, cv2.COLOR_GRAY2RGB)
+for test_img in [img, inv]:
+    print("Testing image variant")
+    res = ocr.ocr(test_img)
+    for line in res[0]: print(line[1][0])
+    print()
