@@ -1,28 +1,29 @@
 import streamlit as st
-import easyocr
+import pytesseract
 import numpy as np
-from PIL import Image
 import cv2
-import re
 import json
+import re
+from PIL import Image
 
-# Load EasyOCR
-reader = easyocr.Reader(['en'], gpu=False)
+# Optional: specify path to tesseract executable if not in PATH
+# pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  # Linux
+# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Windows
 
-# === Image Preprocessing ===
+# Preprocess image for better OCR
 def preprocess_image(pil_img):
     img = np.array(pil_img)
     img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
-    img = cv2.resize(img, (img.shape[1] * 2, img.shape[0] * 2))  # upscale
-    img = cv2.bilateralFilter(img, 9, 75, 75)  # denoise
-    return Image.fromarray(img)
+    img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2))
+    img = cv2.bilateralFilter(img, 9, 75, 75)
+    _, img = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY)
+    return img
 
-# === OCR Text Extraction ===
+# Run Tesseract OCR
 def extract_text(image):
-    result = reader.readtext(np.array(image), detail=0, paragraph=True)
-    return "\n".join(result)
+    return pytesseract.image_to_string(image)
 
-# === Fuzzy Pattern Matching ===
+# Fuzzy pattern matching
 def fuzzy_search(patterns, text):
     for pat in patterns:
         match = re.search(pat, text, re.IGNORECASE)
@@ -30,7 +31,7 @@ def fuzzy_search(patterns, text):
             return match
     return None
 
-# === Extract Fields ===
+# Extract structured fields
 def extract_fields(text):
     data = {}
 
@@ -92,27 +93,27 @@ def extract_fields(text):
     return structured
 
 # === Streamlit UI ===
-st.set_page_config(page_title="🧾 Certificate Extractor", layout="centered")
-st.title("📜 OCR Certificate Data Extractor")
+st.set_page_config(page_title="Tesseract OCR Extractor", layout="centered")
+st.title("📜 OCR Certificate Extractor (with Tesseract)")
 
 uploaded_file = st.file_uploader("📤 Upload a certificate image (JPG, PNG)", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded Image", use_column_width=True)
+    pil_image = Image.open(uploaded_file)
+    st.image(pil_image, caption="Uploaded Image", use_column_width=True)
 
-    with st.spinner("🔍 Extracting text..."):
-        preprocessed_image = preprocess_image(image)
-        text = extract_text(preprocessed_image)
-        structured_data = extract_fields(text)
+    with st.spinner("🔍 Running OCR..."):
+        processed = preprocess_image(pil_image)
+        text = extract_text(processed)
+        structured = extract_fields(text)
 
     st.subheader("📄 Raw OCR Text")
     st.text(text)
 
     st.subheader("📋 Extracted Fields")
-    st.json(structured_data)
+    st.json(structured)
 
-    st.subheader("📥 Download Outputs")
+    st.subheader("📥 Download")
     col1, col2 = st.columns(2)
-    col1.download_button("⬇️ Download JSON", data=json.dumps(structured_data, indent=4), file_name="output.json", mime="application/json")
-    col2.download_button("⬇️ Download Raw Text", data=text, file_name="raw_text.txt", mime="text/plain")
+    col1.download_button("⬇️ Download JSON", json.dumps(structured, indent=4), "output.json", "application/json")
+    col2.download_button("⬇️ Download Raw Text", text, "raw_text.txt", "text/plain")
