@@ -1,29 +1,32 @@
 import streamlit as st
-import pytesseract
+from paddleocr import PaddleOCR
 import numpy as np
 import cv2
 import json
 import re
 from PIL import Image
 
-# Optional: specify path to tesseract executable if not in PATH
-# pytesseract.pytesseract.tesseract_cmd = r'/usr/bin/tesseract'  # Linux
-# pytesseract.pytesseract.tesseract_cmd = r'C:\Program Files\Tesseract-OCR\tesseract.exe'  # Windows
+# Initialize PaddleOCR model
+ocr = PaddleOCR(use_angle_cls=True, lang='en')
 
-# Preprocess image for better OCR
+# Preprocess image
 def preprocess_image(pil_img):
-    img = np.array(pil_img)
+    img = np.array(pil_img.convert("RGB"))
     img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
     img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2))
     img = cv2.bilateralFilter(img, 9, 75, 75)
     _, img = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY)
     return img
 
-# Run Tesseract OCR
+# OCR text from image
 def extract_text(image):
-    return pytesseract.image_to_string(image)
+    result = ocr.ocr(image)
+    lines = []
+    for line in result[0]:
+        lines.append(line[1][0])
+    return "\n".join(lines)
 
-# Fuzzy pattern matching
+# Fuzzy regex match
 def fuzzy_search(patterns, text):
     for pat in patterns:
         match = re.search(pat, text, re.IGNORECASE)
@@ -93,18 +96,18 @@ def extract_fields(text):
     return structured
 
 # === Streamlit UI ===
-st.set_page_config(page_title="Tesseract OCR Extractor", layout="centered")
-st.title("📜 OCR Certificate Extractor (with Tesseract)")
+st.set_page_config(page_title="📜 Certificate Extractor (PaddleOCR)", layout="centered")
+st.title("📑 OCR Certificate Extractor (PaddleOCR)")
 
-uploaded_file = st.file_uploader("📤 Upload a certificate image (JPG, PNG)", type=["jpg", "jpeg", "png"])
+uploaded_file = st.file_uploader("📤 Upload certificate image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     pil_image = Image.open(uploaded_file)
     st.image(pil_image, caption="Uploaded Image", use_column_width=True)
 
-    with st.spinner("🔍 Running OCR..."):
-        processed = preprocess_image(pil_image)
-        text = extract_text(processed)
+    with st.spinner("🔍 Running PaddleOCR..."):
+        preprocessed = preprocess_image(pil_image)
+        text = extract_text(preprocessed)
         structured = extract_fields(text)
 
     st.subheader("📄 Raw OCR Text")
@@ -113,7 +116,7 @@ if uploaded_file:
     st.subheader("📋 Extracted Fields")
     st.json(structured)
 
-    st.subheader("📥 Download")
+    st.subheader("📥 Download Outputs")
     col1, col2 = st.columns(2)
-    col1.download_button("⬇️ Download JSON", json.dumps(structured, indent=4), "output.json", "application/json")
-    col2.download_button("⬇️ Download Raw Text", text, "raw_text.txt", "text/plain")
+    col1.download_button("⬇️ Download JSON", data=json.dumps(structured, indent=4), file_name="output.json", mime="application/json")
+    col2.download_button("⬇️ Download Raw Text", data=text, file_name="raw_text.txt", mime="text/plain")
