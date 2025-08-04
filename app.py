@@ -6,27 +6,25 @@ import json
 import re
 from PIL import Image
 
-# Initialize PaddleOCR model
-ocr = PaddleOCR(use_angle_cls=True, lang='en')
+# Initialize PaddleOCR
+ocr = PaddleOCR(use_angle_cls=True, lang='en')  # No use_gpu
 
-# Preprocess image
+# === Image Preprocessing ===
 def preprocess_image(pil_img):
-    img = np.array(pil_img.convert("RGB"))
-    img = cv2.cvtColor(img, cv2.COLOR_RGB2GRAY)
+    img = np.array(pil_img.convert("RGB"))  # Ensure 3-channel RGB
     img = cv2.resize(img, (img.shape[1]*2, img.shape[0]*2))
-    img = cv2.bilateralFilter(img, 9, 75, 75)
-    _, img = cv2.threshold(img, 150, 255, cv2.THRESH_BINARY)
-    return img
+    img = cv2.bilateralFilter(img, 9, 75, 75)  # Denoise
+    return img  # Keep as 3D array (H x W x 3)
 
-# OCR text from image
+# === OCR Text Extraction ===
 def extract_text(image):
     result = ocr.ocr(image)
     lines = []
-    for line in result[0]:
+    for line in result[0]:  # result[0] contains (box, (text, confidence))
         lines.append(line[1][0])
     return "\n".join(lines)
 
-# Fuzzy regex match
+# === Fuzzy Pattern Matching ===
 def fuzzy_search(patterns, text):
     for pat in patterns:
         match = re.search(pat, text, re.IGNORECASE)
@@ -34,7 +32,7 @@ def fuzzy_search(patterns, text):
             return match
     return None
 
-# Extract structured fields
+# === Extract Fields ===
 def extract_fields(text):
     data = {}
 
@@ -97,15 +95,15 @@ def extract_fields(text):
 
 # === Streamlit UI ===
 st.set_page_config(page_title="📜 Certificate Extractor (PaddleOCR)", layout="centered")
-st.title("📑 OCR Certificate Extractor (PaddleOCR)")
+st.title("📑 OCR Certificate Extractor (Powered by PaddleOCR)")
 
 uploaded_file = st.file_uploader("📤 Upload certificate image", type=["jpg", "jpeg", "png"])
 
 if uploaded_file:
     pil_image = Image.open(uploaded_file)
-    st.image(pil_image, caption="Uploaded Image", use_column_width=True)
+    st.image(pil_image, caption="Uploaded Image", use_container_width=True)
 
-    with st.spinner("🔍 Running PaddleOCR..."):
+    with st.spinner("🔍 Running OCR with PaddleOCR..."):
         preprocessed = preprocess_image(pil_image)
         text = extract_text(preprocessed)
         structured = extract_fields(text)
