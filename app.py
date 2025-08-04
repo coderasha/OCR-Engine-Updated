@@ -16,13 +16,7 @@ st.title("🔍 PaddleOCR Test")
 
 uploaded_file = st.file_uploader("Upload certificate", type=["jpg", "jpeg", "png"])
 
-if uploaded_file:
-    uploaded_file.seek(0)
-    image = Image.open(uploaded_file)
-    st.image(image, caption="Uploaded", use_column_width=True)
 
-    preprocessed = preprocess_image(image)
-    st.text(f"Shape: {preprocessed.shape}")
 
     text = extract_text(preprocessed)
 
