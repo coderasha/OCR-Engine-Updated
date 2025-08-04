@@ -1,54 +1,54 @@
+from fastapi import FastAPI, UploadFile, File
 from paddleocr import PaddleOCR
 import cv2
-import logging
+import os
 
-# Configure logging
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# Initialize FastAPI
+app = FastAPI()
 
-def extract_text_with_paddle(image_path):
+# Initialize PaddleOCR once at startup
+ocr = PaddleOCR(use_angle_cls=True, lang='en', use_gpu=False)
+
+@app.post("/ocr")
+async def extract_text(file: UploadFile = File(...)):
     try:
-        # Initialize PaddleOCR (with recommended settings)
-        ocr = PaddleOCR(
-            use_angle_cls=True,
-            lang='en',
-            show_log=False,
-            use_gpu=False,  # Set to True if you have GPU
-            det_db_box_thresh=0.6,
-            rec_algorithm='SVTR_LCNet'
-        )
+        # Save uploaded file temporarily
+        temp_path = "temp_upload.jpg"
+        with open(temp_path, "wb") as buffer:
+            buffer.write(await file.read())
         
-        # Read image using OpenCV
-        img = cv2.imread(image_path)
+        # Read image
+        img = cv2.imread(temp_path)
         if img is None:
-            raise ValueError(f"Could not read image at {image_path}")
-            
+            return {"error": "Could not read image"}
+        
         # Perform OCR
         result = ocr.ocr(img)
         
-        # Process results (updated for current PaddleOCR version)
+        # Process results
         extracted_text = []
-        if result is not None:
+        if result:
             for line in result:
-                if line:  # Check if line exists
+                if line:
                     for word_info in line:
                         try:
-                            # Current PaddleOCR structure
                             text = word_info[1][0]
                             confidence = float(word_info[1][1])
                             if confidence > 0.6:
                                 extracted_text.append(text)
-                        except (IndexError, TypeError) as e:
-                            logger.warning(f"Skipping word due to parsing error: {e}")
+                        except (IndexError, TypeError):
                             continue
         
-        return ' '.join(extracted_text) if extracted_text else "No text detected"
+        # Clean up
+        os.remove(temp_path)
+        
+        return {"text": " ".join(extracted_text) if extracted_text else "No text detected"}
     
     except Exception as e:
-        logger.error(f"OCR processing failed: {str(e)}")
-        return None
+        if os.path.exists(temp_path):
+            os.remove(temp_path)
+        return {"error": str(e)}
 
-# Example usage
 if __name__ == "__main__":
-    result = extract_text_with_paddle("c2.jpeg")
-    print("Extracted Text:", result)
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
